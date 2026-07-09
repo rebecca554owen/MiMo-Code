@@ -847,8 +847,11 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             sdk.client.session.actors({ sessionID }),
             sdk.client.session.task({ sessionID }),
             // children aren't in the root-only session list; fetch them so the
-            // session dialog can show the current session's child sessions
-            sdk.client.session.children({ sessionID }).catch(() => undefined),
+            // session dialog can show the current session's child sessions.
+            // visible: true hides internal machinery children (checkpoint-writer
+            // hosts, ask-tool forks, workflow subagent sessions) — only peer
+            // sessions the user should see are returned.
+            sdk.client.session.children({ sessionID, visible: true }).catch(() => undefined),
           ])
           setStore(
             produce((draft) => {

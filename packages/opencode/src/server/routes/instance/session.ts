@@ -201,11 +201,21 @@ export const SessionRoutes = lazy(() =>
           sessionID: Session.ChildrenInput,
         }),
       ),
+      validator(
+        "query",
+        z.object({
+          visible: z.coerce
+            .boolean()
+            .optional()
+            .meta({ description: "Only return user-visible children (peer sessions); hides internal subagent hosts" }),
+        }),
+      ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
+        const visible = c.req.valid("query").visible
         return jsonRequest("SessionRoutes.children", c, function* () {
           const session = yield* Session.Service
-          return yield* session.children(sessionID)
+          return yield* session.children(sessionID, { visible })
         })
       },
     )
