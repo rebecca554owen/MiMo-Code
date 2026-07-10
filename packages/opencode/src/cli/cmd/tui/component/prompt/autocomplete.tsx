@@ -6,6 +6,7 @@ import { createMemo, createResource, createEffect, onMount, onCleanup, Index, Sh
 import { createStore } from "solid-js/store"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
+import { useLocal } from "@tui/context/local"
 import { getScrollAcceleration } from "../../util/scroll"
 import { useTuiConfig } from "../../context/tui-config"
 import { useTheme, selectedForeground } from "@tui/context/theme"
@@ -84,6 +85,7 @@ export function Autocomplete(props: {
 }) {
   const sdk = useSDK()
   const sync = useSync()
+  const local = useLocal()
   const command = useCommandDialog()
   const lang = useLanguage()
   const { theme } = useTheme()
@@ -370,6 +372,7 @@ export function Autocomplete(props: {
 
     for (const serverCommand of sync.data.command) {
       if (serverCommand.source === "skill" && !Flag.MIMOCODE_ENABLE_SLASH_SKILLS) continue
+      if (serverCommand.source === "skill" && serverCommand.name.startsWith("compose:") && local.agent.current()?.name !== "compose") continue
       const label = serverCommand.source === "mcp" ? ":mcp" : ""
       results.push({
         display: "/" + serverCommand.name + label,
