@@ -29,9 +29,16 @@ type PendingRec = {
 
 type Rule = { permission: string; pattern: string; action: "allow" | "ask" | "deny" }
 
+// The parent's grant snapshot is kept as TWO ordered phases, never flattened.
+// The child mirrors the parent's own two-phase evaluation: a `ruleset` deny must
+// win outright, and only a non-denying ruleset lets an `approved` allow upgrade
+// an ask. Flattening into one array would let `findLast` pick a trailing
+// approved allow over a ruleset deny — inverting deny precedence.
+type ParentGrantSnapshot = { ruleset: Rule[]; approved: Rule[] }
+
 const grants = new Map<string, Set<string>>()
 const pending = new Map<string, PendingRec>()
-const parentGrants = new Map<string, Rule[]>()
+const parentGrants = new Map<string, ParentGrantSnapshot>()
 
 export const forwardRef = {
   grants,
@@ -54,13 +61,16 @@ export const forwardRef = {
     for (const set of grants.values()) set.delete(childSessionID)
     for (const [id, rec] of pending) if (rec.childSessionID === childSessionID) pending.delete(id)
   },
-  // Publish/refresh the parent session's approved ruleset so background children
-  // in another Instance can consult it. Snapshot is a shallow copy so later
-  // mutation of the parent's live array can't retroactively widen a child grant.
-  setParentGrants(parentSessionID: string, ruleset: Rule[]) {
-    parentGrants.set(parentSessionID, [...ruleset])
+  // Publish/refresh the parent session's grant snapshot so background children
+  // in another Instance can consult it. Stored as two ordered phases (ruleset,
+  // approved) — NEVER flattened — so the child can mirror the parent's two-phase
+  // evaluation (ruleset deny wins outright; only then may an approved allow
+  // upgrade). Each phase is shallow-copied so later mutation of the parent's live
+  // arrays can't retroactively widen a child grant.
+  setParentGrants(parentSessionID: string, snapshot: ParentGrantSnapshot) {
+    parentGrants.set(parentSessionID, { ruleset: [...snapshot.ruleset], approved: [...snapshot.approved] })
   },
-  getParentGrants(parentSessionID: string): Rule[] | undefined {
+  getParentGrants(parentSessionID: string): ParentGrantSnapshot | undefined {
     return parentGrants.get(parentSessionID)
   },
   clearParentGrants(parentSessionID: string) {

@@ -230,11 +230,12 @@ export const layer = Layer.effect(
       const { ruleset, ...request } = input
       let needsAsk = false
 
-      // Publish this session's effective grant snapshot (ruleset + persisted
-      // approvals) so background children in another Instance can inherit it.
-      // Merge order matches the child-side check: config/session ruleset first,
-      // then session-accumulated approvals.
-      forwardRef.setParentGrants(request.sessionID, [...ruleset, ...approved])
+      // Publish this session's effective grant snapshot so background children
+      // in another Instance can inherit it. Kept as two ordered phases (ruleset,
+      // then session-accumulated approvals) — NOT flattened — so the child can
+      // mirror the two-phase evaluation below: a ruleset deny wins outright, and
+      // only a non-denying ruleset lets an approved allow upgrade an ask.
+      forwardRef.setParentGrants(request.sessionID, { ruleset, approved })
 
       const forced = FORCED_ASK.has(request.permission)
 
@@ -279,11 +280,21 @@ export const layer = Layer.effect(
       // hold isn't matched → we do NOT return here → it fails closed at the
       // non-interactive gate. No human wait, no hang.
       if (needsAsk && input.inherit && !forced) {
-        const parentRuleset = forwardRef.getParentGrants(input.inherit.parentSessionID)
-        if (parentRuleset) {
-          const allAllowed = request.patterns.every(
-            (pattern) => evaluate(request.permission, pattern, parentRuleset).action === "allow",
-          )
+        const parentSnapshot = forwardRef.getParentGrants(input.inherit.parentSessionID)
+        if (parentSnapshot) {
+          // Mirror the parent's own two-phase evaluation (see the deny loop
+          // above). A parent ruleset deny must win outright — an approved allow
+          // must NOT be able to out-rank it — so evaluate the ruleset ALONE for
+          // deny first, and only for a non-denying ruleset let approvals upgrade
+          // to allow. Never flatten ruleset+approved into one findLast pass:
+          // that would let a trailing approved allow beat a ruleset deny and let
+          // the child escape a permission the parent itself would refuse.
+          const allAllowed = request.patterns.every((pattern) => {
+            if (evaluate(request.permission, pattern, parentSnapshot.ruleset).action === "deny") return false
+            return (
+              evaluate(request.permission, pattern, parentSnapshot.ruleset, parentSnapshot.approved).action === "allow"
+            )
+          })
           if (allAllowed) {
             log.info("inheriting parent grant, auto-allowing", {
               permission: request.permission,
@@ -493,16 +504,15 @@ export const layer = Layer.effect(
         })
       }
       // Refresh the parent snapshot so a background child inherits this
-      // just-approved grant on its next ask (the parent's `ruleset` isn't known
-      // here, so publish approvals alone — ask() re-publishes with ruleset).
-      forwardRef.setParentGrants(existing.info.sessionID, [
-        ...(forwardRef.getParentGrants(existing.info.sessionID) ?? []),
-        ...existing.info.always.map((pattern) => ({
-          permission: existing.info.permission,
-          pattern,
-          action: "allow" as const,
-        })),
-      ])
+      // just-approved grant on its next ask. The parent's `ruleset` isn't known
+      // here, so preserve whatever ruleset phase ask() last published and update
+      // only the approved phase (the live `approved` array already holds the
+      // just-pushed patterns). Keeping the phases separate preserves deny
+      // precedence for the child (a ruleset deny still can't be out-ranked).
+      forwardRef.setParentGrants(existing.info.sessionID, {
+        ruleset: forwardRef.getParentGrants(existing.info.sessionID)?.ruleset ?? [],
+        approved,
+      })
 
       for (const [id, item] of pending.entries()) {
         if (item.info.sessionID !== existing.info.sessionID) continue
