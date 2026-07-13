@@ -2193,10 +2193,10 @@ describe("ProviderTransform.message - cache control on gateway", () => {
 
   test("openai-compatible with claude in model id does NOT trigger caching", () => {
     const model = createModel({
-      id: "mimorouter/claude-opus-4-8",
+      id: "gateway/claude-opus-4-8",
       providerID: "custom",
       api: {
-        id: "mimorouter/claude-opus-4-8",
+        id: "gateway/claude-opus-4-8",
         url: "https://proxy.example.com/v1",
         npm: "@ai-sdk/openai-compatible",
       },
