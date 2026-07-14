@@ -82,7 +82,7 @@ export function parseActorNotification(text: string): ParsedActorNotification | 
   //   failed                            → the process itself failed
   //   was cancelled / stalled           → cancelled / watchdog
   const header = text.match(
-    /Background sub-session "(.*?)" \(actor_id: [^)]*\)\s+(completed|finished|ended|failed|was cancelled|stalled)\b/,
+    /Background (?:sub-session|actor) "(.*?)" \(actor_id: [^)]*\)\s+(completed|finished|ended|failed|was cancelled|stalled)\b/,
   )
   if (!header) return null
   const description = header[1]

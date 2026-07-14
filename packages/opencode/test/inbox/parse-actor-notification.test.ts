@@ -179,4 +179,14 @@ describe("parseActorNotification", () => {
   test("returns null when the wrapper is present but the header is malformed", () => {
     expect(parseActorNotification("<actor-notification>\ngarbage\n</actor-notification>")).toBeNull()
   })
+
+  test("backward compat: parses legacy 'Background actor' format as a card", () => {
+    const text =
+      '<actor-notification>\nBackground actor "Legacy task" (actor_id: explore-1) completed.\nResult: done\n</actor-notification>'
+    expect(parseActorNotification(text)).toEqual({
+      status: "completed",
+      description: "Legacy task",
+      summary: "done",
+    })
+  })
 })
