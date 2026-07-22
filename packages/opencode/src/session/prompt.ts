@@ -306,7 +306,7 @@ export const layer = Layer.effect(
     const actorRegistry = yield* ActorRegistry.Service
     const inbox = yield* Inbox.Service
 
-    // Late-bound ref (see tool-script-ref.ts): tool_script dispatches MCP tools
+    // Late-bound ref (see tool-script-ref.ts): exec dispatches MCP tools
     // through the same live client set the agent sees. Populated here (not in
     // ToolRegistry) because MCP's layer lives in this graph — the registry
     // providing MCP.defaultLayer itself would duplicate client connections.

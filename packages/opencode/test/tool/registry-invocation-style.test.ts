@@ -19,6 +19,42 @@ afterEach(async () => {
 })
 
 describe("ToolRegistry.tools: invocation style resolution", () => {
+  it.live("exposes exec by default only to GPT models", () =>
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const reg = yield* ToolRegistry.Service
+        const agents = yield* Agent.Service
+        const general = yield* agents.get("general")
+        if (!general) throw new Error("no general agent")
+        const ids = (modelID: string) =>
+          reg
+            .tools({
+              providerID: ProviderID.opencode,
+              modelID: ModelID.make(modelID),
+              agent: general,
+            })
+            .pipe(Effect.map((tools) => tools.map((tool) => tool.id)))
+
+        const gpt = yield* reg.tools({
+          providerID: ProviderID.opencode,
+          modelID: ModelID.make("openai/gpt-5.4"),
+          agent: general,
+        })
+        const exec = gpt.find((tool) => tool.id === "exec")
+        expect(exec).toBeDefined()
+        expect(exec?.description).toContain("apply_patch(input:")
+        expect(exec?.description).toContain("bash(input:")
+        expect(exec?.description).toContain("exec_command(input:")
+        expect(exec?.description).not.toContain("read(input:")
+        expect(exec?.description).not.toContain("write(input:")
+        expect(exec?.description).not.toContain("edit(input:")
+        expect(yield* ids("anthropic/claude-sonnet-4-6")).not.toContain("exec")
+        expect(yield* ids("mimo-v2")).not.toContain("exec")
+      }),
+    ),
+    10000,
+  )
+
   it.live("exposes skill_search to GPT and Claude models", () =>
     provideTmpdirInstance(() =>
       Effect.gen(function* () {

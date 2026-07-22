@@ -2134,7 +2134,7 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         <Match when={props.part.tool === "workflow"}>
           <Workflow {...toolprops} />
         </Match>
-        <Match when={props.part.tool === "tool_script"}>
+        <Match when={props.part.tool === "exec"}>
           <ToolScript {...toolprops} />
         </Match>
         <Match when={props.part.tool === "plan_exit"}>
@@ -2236,7 +2236,7 @@ function WorkItemTask(props: ToolProps<typeof TaskTool>) {
   )
 }
 
-// Renderer for the `tool_script` batch-orchestration tool. Default view is a
+// Renderer for the `exec` batch-orchestration tool. Default view is a
 // single InlineTool line — spinner + live aggregated call counts while running
 // (published through ctx.metadata), one muted summary line when done. Clicking
 // swaps to the full BlockTool with code, result, logs and per-call trace.
@@ -2278,11 +2278,11 @@ function ToolScript(props: ToolProps<typeof ToolScriptTool>) {
           part={props.part}
           onClick={() => setExpanded(true)}
         >
-          tool_script {summary()}
+          exec {summary()}
         </InlineTool>
       }
     >
-      <BlockTool title={`# tool_script · ${summary()}`} part={props.part} onClick={() => setExpanded(false)}>
+      <BlockTool title={`# exec · ${summary()}`} part={props.part} onClick={() => setExpanded(false)}>
         <box gap={1}>
           <text fg={theme.textMuted}>{((props.input.code as string | undefined) ?? "").trim()}</text>
           <Show when={props.output}>

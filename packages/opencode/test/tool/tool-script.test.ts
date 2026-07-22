@@ -129,7 +129,7 @@ async function runToolScript(
   }
 }
 
-describe("tool_script", () => {
+describe("exec", () => {
   test("executes code, calls tools, returns aggregated result", async () => {
     const seen: string[] = []
     const defs = [
@@ -272,14 +272,26 @@ describe("tool_script", () => {
     expect(result.output).toContain("unknown tool: task")
   })
 
-  test("bash is excluded from the sandbox", async () => {
-    const defs = [fakeDef("bash", async () => "should never run")]
+  test("bash and exec_command dispatch through the same tool definition", async () => {
+    const seen: string[] = []
+    const defs = [
+      fakeDef("bash", async (args) => {
+        seen.push(args.value)
+        return `ran:${args.value}`
+      }),
+    ]
     const result = await runToolScript(
-      `try { await tools.bash({ value: "ls" }) } catch (e) { return e.message }`,
+      `return await Promise.all([
+        tools.bash({ value: "direct" }),
+        tools.exec_command({ value: "alias" }),
+      ])`,
       defs,
     )
     expect(result.metadata.status).toBe("completed")
-    expect(result.output).toContain("unknown tool: bash")
+    expect(result.metadata.toolCalls).toBe(2)
+    expect(result.output).toContain("ran:direct")
+    expect(result.output).toContain("ran:alias")
+    expect(seen.toSorted()).toEqual(["alias", "direct"])
   })
 
   test("concurrency is capped at 8", async () => {
@@ -306,7 +318,7 @@ describe("tool_script", () => {
     expect(peak).toBeGreaterThan(1)
   })
 
-  test("Date works inside tool_script guest", async () => {
+  test("Date works inside exec guest", async () => {
     const result = await runToolScript(`return typeof Date.now()`, [])
     expect(result.output).toContain("number")
   })
@@ -485,7 +497,7 @@ describe("tool_script", () => {
   })
 })
 
-describe("tool_script MCP dispatch", () => {
+describe("exec MCP dispatch", () => {
   function fakeMcpTool(execute: (args: any) => Promise<any>) {
     return {
       description: "fake mcp tool",
@@ -601,10 +613,18 @@ describe("renderToolScriptDeclarations", () => {
     expect(text).toContain("declare const tools")
   })
 
-  test("exclusion list covers agent control-flow tools and bash", () => {
-    for (const id of ["task", "question", "actor", "skill", "plan_enter", "plan_exit", "tool_script", "bash"]) {
+  test("exclusion list covers agent control-flow tools but allows bash", () => {
+    for (const id of ["task", "question", "actor", "skill", "plan_enter", "plan_exit", "exec"]) {
       expect(TOOL_SCRIPT_EXCLUDED.has(id)).toBe(true)
     }
+    expect(TOOL_SCRIPT_EXCLUDED.has("bash")).toBe(false)
+  })
+
+  test("renders exec_command as an alias for bash", () => {
+    const text = renderToolScriptDeclarations([fakeDef("bash", async () => "x")])
+    expect(text).toContain("bash(input:")
+    expect(text).toContain("exec_command(input:")
+    expect(text).toContain("Alias for bash")
   })
 
   test("MCP tools are rendered into the declaration block", () => {

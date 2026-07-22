@@ -164,13 +164,6 @@ export const Flag = {
   MIMOCODE_SERVER_USERNAME: process.env["MIMOCODE_SERVER_USERNAME"],
   MIMOCODE_ENABLE_QUESTION_TOOL: truthy("MIMOCODE_ENABLE_QUESTION_TOOL"),
 
-  // Defaults to false (tool_script hidden). Set MIMOCODE_ENABLE_TOOL_SCRIPT=true
-  // (or 1, or the umbrella MIMOCODE_EXPERIMENTAL) to register the tool_script
-  // sandbox tool. Getter so tests can flip the env var at runtime.
-  get MIMOCODE_ENABLE_TOOL_SCRIPT() {
-    return MIMOCODE_EXPERIMENTAL || truthy("MIMOCODE_ENABLE_TOOL_SCRIPT")
-  },
-
   // Defaults to false. Set MIMOCODE_ENABLE_TRY_BEST_HANDOFF=true (or 1) to
   // enable try-best loop detection, automatic turn pausing, and handoff UI.
   MIMOCODE_ENABLE_TRY_BEST_HANDOFF: truthy("MIMOCODE_ENABLE_TRY_BEST_HANDOFF"),
