@@ -72,9 +72,7 @@ Compose agent stays enabled, keeps its private skills, its prompt injection, and
 
 Three additive deprecation touchpoints:
 
-1. **Agent description and opening prompt** — single deprecation line appended to `agent.ts` compose block description and to `packages/opencode/src/session/prompt/compose.txt`:
-
-   > Legacy Compose is deprecated but remains available for compatibility. With a Fable/Sol-class model, switch to Build and run `/compose-next`.
+1. **Agent description only** — single deprecation line appended to the `agent.ts` compose block `description`. The Compose system prompt (`packages/opencode/src/session/prompt/compose.txt`) is deliberately **not** touched: any byte change to a model-facing system prompt invalidates prefix cache for every existing Compose session. The description gives the TUI its deprecation copy; the input-bar `Compose (legacy)` label gives users a direct visual cue. That is enough.
 
 2. **Home tips — compose-only display override** — one new tip `tui.tips.compose_next` recommending Build + `/compose-next` is added to the i18n dictionaries but **not** to `TIP_KEYS` / `PRIORITY_WEIGHTS` (`packages/opencode/src/cli/cmd/tui/feature-plugins/home/tips-view.tsx`). The rotation runs exactly as on `main` and cycles the normal weighted pool; a `displayKey` memo overrides the rendered key to `tui.tips.compose_next` while `local.agent.current()?.name === "compose"`. Entering Compose visibly swaps to the deprecation tip; leaving Compose reveals whatever key the rotation currently holds — no artificial mid-cycle swap, and no impact on switches that do not involve the Compose agent. The Tips component only renders on home, so session-view Tab switching does not affect this.
 
@@ -113,7 +111,6 @@ Add:
 Modify:
 
 - `packages/opencode/src/agent/agent.ts` — add exact `"compose-next": "deny"` to the default agent's `skill` permission ruleset (adjacent to the existing `"compose:*": "deny"`). Append the deprecation line to the Compose agent block's `description`. Do not add any skill rule to the Compose agent.
-- `packages/opencode/src/session/prompt/compose.txt` — append the same deprecation line as a single-line edit; do not rewrite the file.
 - `packages/opencode/src/tool/skill-search.ts` — resolve current agent from context and source the searchable list from `Skill.available(agent)` instead of `Skill.all()`. Update the tool description string accordingly if needed.
 - `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` — the input-bar agent label render (currently `Locale.titlecase(agent().name)`) shows `Compose (legacy)` when `agent.name === "compose"`. Pure display change; identity, routing, tab-cycle and everything else remain the same.
 - `packages/opencode/src/cli/cmd/tui/feature-plugins/home/tips-view.tsx` — leave the rotation exactly as on `main` (do NOT add `tui.tips.compose_next` to `TIP_KEYS`/`PRIORITY_WEIGHTS`). Add a `displayKey` memo that overrides the rendered key to `tui.tips.compose_next` while the current agent is `compose`, otherwise returns the rotation's current key. Non-compose agent switches must not trigger any rotation change.
@@ -123,6 +120,7 @@ Modify:
 
 Do not touch:
 
+- `packages/opencode/src/session/prompt/compose.txt` — model-facing system prompt; any byte change invalidates every existing Compose session's prefix cache.
 - `packages/opencode/src/skill/index.ts` scanner or `Info` schema.
 - `packages/opencode/src/skill/search.ts` `startsWith("compose:")` filter.
 - `packages/opencode/src/permission/evaluate.ts` (no `evaluateSkill`).
@@ -172,7 +170,7 @@ Draft PR opens in Ready state (not Draft) since this is the successor implementa
 ## [S5] Out of scope
 
 - Deleting or renaming any `compose:*` skill.
-- Any change to `compose.js`, `compose.txt` content beyond the single deprecation line, or the Compose agent's permission set.
+- Any change to `compose.js` or `compose.txt` content, or to the Compose agent's permission set. `compose.txt` in particular is a model-facing system prompt and any byte change invalidates prefix cache for every existing Compose session.
 - Introducing `Skill.Info.scope`, `Permission.evaluateSkill`, or `ScanMeta` scanning.
 - Hard model-ID gating for `/compose-next`.
 - Treating model-undiscoverability as a security boundary.
@@ -191,7 +189,7 @@ Draft PR opens in Ready state (not Draft) since this is the successor implementa
 - [ ] T1: author `packages/opencode/src/skill/builtin/.bundle/compose-next/SKILL.md` by hand-merging compact contracts from `origin/compose-slim` three slim skills — acceptance: skill validator reports 0 errors, 0 warnings; single-file self-contained load; executable contracts for grill / spec / worktree / verify / review / finalize / finish present (covers: S2)
 - [ ] T2: add exact `"compose-next": "deny"` to default agent skill permission — acceptance: `Skill.available(defaultAgent)` omits `compose-next`; `Skill.all()` includes it; test asserts both (covers: S2, S3)
 - [ ] T3: switch `tool/skill-search.ts` to `Skill.available(agent)` — acceptance: search over a query matching `compose-next` under the default agent returns no result; existing search tests remain green (covers: S2, S3)
-- [ ] T4: append deprecation line to Compose agent `description` in `agent.ts` and to `compose.txt` opening prompt — acceptance: single-line addition in each; Compose agent behavior otherwise unchanged; existing Compose tests green (covers: S2)
+- [ ] T4: append deprecation line to Compose agent `description` in `agent.ts` — acceptance: single-line addition; Compose agent behavior otherwise unchanged; `compose.txt` untouched (prefix-cache stability); existing Compose tests green (covers: S2)
 - [ ] T5: surface `tui.tips.compose_next` as a compose-only display override in `tips-view.tsx` (leave rotation identical to main; excluded from `TIP_KEYS`/`PRIORITY_WEIGHTS`; a `displayKey` memo overrides while agent is `compose`); remove the first-session gate in `tips.tsx` so tips also render on a fresh project; add key to all seven locale files — acceptance: rendered tip is compose_next iff current agent is `compose`; non-compose agent switches do not trigger tip changes; leaving compose reveals the rotation's current key; on a fresh project the tips row renders; all seven locales carry the key (covers: S2)
 - [ ] T6: show `Compose (legacy)` in the input-bar agent label when the current agent is `compose` — acceptance: agent identity, routing, and Tab-cycle unchanged; only the rendered label carries the suffix; label for `build`/`plan` unchanged (covers: S2)
 - [ ] T7: add `tui.skill.compose-next.description` to all seven locales — acceptance: skill dialog / autocomplete render the localized description (covers: S2)
