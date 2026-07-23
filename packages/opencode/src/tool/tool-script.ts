@@ -8,7 +8,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js"
 import { EffectBridge, InstanceState } from "@/effect"
 import { Log, Filesystem } from "@/util"
 import { Agent } from "@/agent/agent"
-import { ModelID, type ProviderID } from "../provider/schema"
+import type { ModelID, ProviderID } from "../provider/schema"
 import { normalizeToolResult } from "../mcp/tool-result"
 import { evalScript, type HostFn } from "../workflow/sandbox"
 import { toolScriptRegistry, toolScriptMcp, TOOL_SCRIPT_ALIASES, TOOL_SCRIPT_EXCLUDED } from "./tool-script-ref"
@@ -347,19 +347,24 @@ export const ToolScriptTool = Tool.define(
           const getDefs = toolScriptRegistry.current
           if (!getDefs) throw new Error("exec tool registry unavailable")
           const agentInfo = yield* agents.get(ctx.agent)
-          const model = ctx.extra?.model as { providerID: ProviderID; api: { id: string } } | undefined
+          const model = ctx.extra?.model as { id: ModelID; providerID: ProviderID } | undefined
+          const whitelist = Array.isArray(ctx.extra?.toolWhitelist)
+            ? new Set(ctx.extra.toolWhitelist.filter((id): id is string => typeof id === "string"))
+            : undefined
           const defs = (
             yield* getDefs(
               model
-                ? { providerID: model.providerID, modelID: ModelID.make(model.api.id), agent: agentInfo }
+                ? { providerID: model.providerID, modelID: model.id, agent: agentInfo }
                 : undefined,
             )
-          ).filter((def) => !TOOL_SCRIPT_EXCLUDED.has(def.id))
+          ).filter((def) => !TOOL_SCRIPT_EXCLUDED.has(def.id) && (!whitelist || whitelist.has(def.id)))
           const byId = new Map(defs.map((def) => [def.id, def]))
           // MCP tools (late-bound ref, populated by SessionPrompt). Builtin ids
           // win on collision — an MCP server must not shadow `read`/`grep`.
           const mcpTools = toolScriptMcp.current ? yield* toolScriptMcp.current() : {}
-          const mcpById = new Map(Object.entries(mcpTools).filter(([id]) => !byId.has(id)))
+          const mcpById = new Map(
+            Object.entries(mcpTools).filter(([id]) => !byId.has(id) && (!whitelist || whitelist.has(id))),
+          )
           // Non-git projects report worktree === "/" (see Instance.containsPath) —
           // "/" as a jail root would allow EVERYTHING. Fall back to the project
           // directory in that case. Relative guest paths resolve against roots[0].

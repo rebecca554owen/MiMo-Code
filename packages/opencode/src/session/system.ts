@@ -8,6 +8,7 @@ import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
 import PROMPT_GPT from "./prompt/gpt.txt"
 import PROMPT_KIMI from "./prompt/kimi.txt"
+import PROMPT_GPT_SUBAGENT_TOOLS from "../agent/prompt/gpt-tools.txt"
 
 import PROMPT_CODEX from "./prompt/codex.txt"
 import PROMPT_DEEPSEEK from "./prompt/deepseek.txt"
@@ -20,24 +21,28 @@ import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
 import { Skill } from "@/skill"
 import { isSkillSearchDisabled, type SkillSearchModel } from "@/skill/search"
+import { usesGPTToolset } from "@/tool/gpt"
 
 export function provider(model: Provider.Model) {
-  if (model.api.id.includes("gpt-4") || model.api.id.includes("o1") || model.api.id.includes("o3"))
-    return [PROMPT_BEAST]
-  if (model.api.id.includes("gpt")) {
-    if (model.api.id.includes("codex")) {
-      return [PROMPT_CODEX]
-    }
-    return [PROMPT_GPT]
+  const prompt = (id: string) => {
+    if (id.includes("gpt-4") || id.includes("o1") || id.includes("o3")) return PROMPT_BEAST
+    if (id.includes("gpt")) return id.includes("codex") ? PROMPT_CODEX : PROMPT_GPT
+    if (id.includes("gemini-")) return PROMPT_GEMINI
+    if (id.includes("claude")) return PROMPT_ANTHROPIC
+    if (id.toLowerCase().includes("trinity")) return PROMPT_TRINITY
+    if (id.toLowerCase().includes("kimi")) return PROMPT_KIMI
+    if (id.toLowerCase().includes("deepseek")) return PROMPT_DEEPSEEK
+    if (id.toLowerCase().includes("glm")) return PROMPT_GLM
+    if (id.toLowerCase().includes("minimax")) return PROMPT_MINIMAX
   }
-  if (model.api.id.includes("gemini-")) return [PROMPT_GEMINI]
-  if (model.api.id.includes("claude")) return [PROMPT_ANTHROPIC]
-  if (model.api.id.toLowerCase().includes("trinity")) return [PROMPT_TRINITY]
-  if (model.api.id.toLowerCase().includes("kimi")) return [PROMPT_KIMI]
-  if (model.api.id.toLowerCase().includes("deepseek")) return [PROMPT_DEEPSEEK]
-  if (model.api.id.toLowerCase().includes("glm")) return [PROMPT_GLM]
-  if (model.api.id.toLowerCase().includes("minimax")) return [PROMPT_MINIMAX]
-  return [PROMPT_DEFAULT]
+  return [prompt(model.id) ?? prompt(model.api.id) ?? PROMPT_DEFAULT]
+}
+
+export function agent(agent: Agent.Info, model: Provider.Model) {
+  const base = agent.prompt ? [agent.prompt] : provider(model)
+  if (agent.mode !== "subagent" || agent.toolAllowlist?.length === 0 || !usesGPTToolset(model.id)) return base
+  if (!agent.prompt && base.includes(PROMPT_GPT)) return base
+  return [...base, PROMPT_GPT_SUBAGENT_TOOLS]
 }
 
 export interface Interface {

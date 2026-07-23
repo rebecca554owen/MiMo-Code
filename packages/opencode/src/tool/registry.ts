@@ -73,6 +73,7 @@ import { resolveInvocationStyle } from "./invocation-style"
 import { BuiltinWorkflow } from "@/workflow/builtin"
 import { ToolScriptTool, renderToolScriptDeclarations } from "./tool-script"
 import { toolScriptRegistry, toolScriptMcp } from "./tool-script-ref"
+import { usesGPTToolset } from "./gpt"
 
 const log = Log.create({ service: "tool.registry" })
 
@@ -365,8 +366,7 @@ export const layer = Layer.effect(
       modelID: ModelID
       agent: Agent.Info
     }) {
-      const useGPTTools =
-        input.modelID.includes("gpt-") && !input.modelID.includes("oss") && !input.modelID.includes("gpt-4")
+      const useGPTTools = usesGPTToolset(input.modelID)
       let filtered = (yield* all()).filter((tool) => {
         if (tool.id === ToolScriptTool.id) return useGPTTools
         if (tool.id === CodeSearchTool.id || tool.id === WebSearchTool.id) {

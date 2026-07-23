@@ -251,6 +251,28 @@ function providerCfg(url: string) {
   }
 }
 
+function gptProviderCfg(url: string) {
+  const config = providerCfg(url)
+  return {
+    ...config,
+    provider: {
+      ...config.provider,
+      "gpt-test": {
+        ...config.provider.test,
+        id: "gpt-test",
+        name: "GPT Test",
+        models: {
+          "gpt-5.4": {
+            ...config.provider.test.models["test-model"],
+            id: "deployment-primary",
+            name: "GPT-5.4",
+          },
+        },
+      },
+    },
+  }
+}
+
 describe("Actor.spawn peer mode", () => {
   it.live("creates a new sessionID, registers actor with mode=peer", () =>
     provideTmpdirServer(
@@ -349,6 +371,132 @@ describe("Actor.spawn peer mode", () => {
 })
 
 describe("Actor.spawn subagent mode", () => {
+  it.live("exposes GPT orchestration and read tools to read-only GPT subagents", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* ({ llm }) {
+        const actor = yield* Actor.Service
+        const session = yield* Session.Service
+        const parent = yield* session.create({ title: "GPT subagent tools" })
+
+        yield* llm.text("done")
+        const result = yield* actor.spawn({
+          mode: "subagent",
+          sessionID: parent.id,
+          agentType: "explore",
+          task: "verify tools",
+          context: "none",
+          tools: "INHERIT",
+          background: false,
+          model: { providerID: ProviderID.make("gpt-test"), modelID: ModelID.make("gpt-5.4") },
+        })
+        yield* Deferred.await(result.outcome)
+
+        const request = (yield* llm.hits).find(
+          (hit) =>
+            Array.isArray(hit.body.tools) &&
+            hit.body.tools.some(
+              (tool) => (tool as { function?: { name?: string } }).function?.name === "view_image",
+            ),
+        )
+        const names = (request?.body.tools as Array<{ function?: { name?: string } }> | undefined)?.map(
+          (tool) => tool.function?.name,
+        )
+        expect(names).toContain("exec")
+        expect(names).toContain("view_image")
+        expect(names).not.toContain("apply_patch")
+        expect(names).not.toContain("read")
+        expect(names).not.toContain("edit")
+        expect(names).not.toContain("write")
+        expect(
+          (request?.body.messages as Array<{ role?: string; content?: string }> | undefined)
+            ?.filter((message) => message.role === "system")
+            .map((message) => message.content)
+            .join("\n"),
+        ).toContain("Use `exec` as the main composition surface")
+      }),
+      { git: true, config: gptProviderCfg },
+    ),
+    30000,
+  )
+
+  it.live("exposes the full GPT-specific tool set to general GPT subagents", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* ({ llm }) {
+        const actor = yield* Actor.Service
+        const session = yield* Session.Service
+        const parent = yield* session.create({ title: "General GPT subagent tools" })
+
+        yield* llm.text("done")
+        const result = yield* actor.spawn({
+          mode: "subagent",
+          sessionID: parent.id,
+          agentType: "general",
+          task: "verify tools",
+          context: "none",
+          tools: "INHERIT",
+          background: false,
+          model: { providerID: ProviderID.make("gpt-test"), modelID: ModelID.make("gpt-5.4") },
+        })
+        yield* Deferred.await(result.outcome)
+
+        const request = (yield* llm.hits).find(
+          (hit) =>
+            Array.isArray(hit.body.tools) &&
+            hit.body.tools.some(
+              (tool) => (tool as { function?: { name?: string } }).function?.name === "view_image",
+            ),
+        )
+        const names = (request?.body.tools as Array<{ function?: { name?: string } }> | undefined)?.map(
+          (tool) => tool.function?.name,
+        )
+        expect(names).toContain("exec")
+        expect(names).toContain("apply_patch")
+        expect(names).toContain("view_image")
+        expect(names).not.toContain("read")
+        expect(names).not.toContain("edit")
+        expect(names).not.toContain("write")
+      }),
+      { git: true, config: gptProviderCfg },
+    ),
+    30000,
+  )
+
+  it.live("keeps the legacy tool set for non-GPT subagents", () =>
+    provideTmpdirServer(
+      Effect.fnUntraced(function* ({ llm }) {
+        const actor = yield* Actor.Service
+        const session = yield* Session.Service
+        const parent = yield* session.create({ title: "General non-GPT subagent tools" })
+
+        yield* llm.text("done")
+        const result = yield* actor.spawn({
+          mode: "subagent",
+          sessionID: parent.id,
+          agentType: "general",
+          task: "verify tools",
+          context: "none",
+          tools: "INHERIT",
+          background: false,
+          model: ref,
+        })
+        yield* Deferred.await(result.outcome)
+
+        const request = (yield* llm.hits).find((hit) => Array.isArray(hit.body.tools))
+        const names = (request?.body.tools as Array<{ function?: { name?: string } }> | undefined)?.map(
+          (tool) => tool.function?.name,
+        )
+        expect(names).toContain("read")
+        expect(names).toContain("edit")
+        expect(names).toContain("write")
+        expect(names).not.toContain("exec")
+        expect(names).not.toContain("apply_patch")
+        expect(names).not.toContain("view_image")
+      }),
+      { git: true, config: providerCfg },
+    ),
+    30000,
+  )
+
   it.live("does NOT create new session, allocates <type>-<n> actorID", () =>
     provideTmpdirServer(
       Effect.fnUntraced(function* ({ llm }) {

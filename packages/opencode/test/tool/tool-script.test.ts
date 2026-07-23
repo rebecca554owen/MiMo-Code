@@ -90,7 +90,13 @@ async function runToolScript(
   code: string,
   defs: Tool.Def[],
   abort?: AbortSignal,
-  opts?: { mcp?: Record<string, any>; ask?: () => Effect.Effect<void>; maxToolCalls?: number; timeoutSeconds?: number },
+  opts?: {
+    mcp?: Record<string, any>
+    ask?: () => Effect.Effect<void>
+    maxToolCalls?: number
+    timeoutSeconds?: number
+    toolWhitelist?: string[]
+  },
 ) {
   const prev = toolScriptRegistry.current
   const prevMcp = toolScriptMcp.current
@@ -115,6 +121,7 @@ async function runToolScript(
               agent: "build",
               abort: abort ?? new AbortController().signal,
               callID: "call_test",
+              extra: opts?.toolWhitelist ? { toolWhitelist: opts.toolWhitelist } : undefined,
               messages: [],
               metadata: () => Effect.void,
               ask: opts?.ask ?? (() => Effect.void),
@@ -130,6 +137,19 @@ async function runToolScript(
 }
 
 describe("exec", () => {
+  test("cannot call tools outside the actor runtime whitelist", async () => {
+    const result = await runToolScript(
+      `return await tools.echo({ value: "blocked" })`,
+      [fakeDef("echo", async () => "unexpected")],
+      undefined,
+      { toolWhitelist: ["exec"] },
+    )
+
+    expect(result.metadata.status).toBe("code_error")
+    expect(result.output).toContain("echo")
+    expect(result.output).not.toContain("unexpected")
+  })
+
   test("executes code, calls tools, returns aggregated result", async () => {
     const seen: string[] = []
     const defs = [

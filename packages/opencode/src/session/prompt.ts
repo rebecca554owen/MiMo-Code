@@ -995,7 +995,12 @@ NOTE: At any point in time through this workflow you should feel free to ask the
         abort: options.abortSignal!,
         messageID: input.processor.message.id,
         callID: options.toolCallId,
-        extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, promptOps },
+        extra: {
+          model: input.model,
+          bypassAgentCheck: input.bypassAgentCheck,
+          promptOps,
+          ...(whitelist ? { toolWhitelist: [...whitelist] } : {}),
+        },
         agent: input.agent.name,
         actorID: input.agentID,
         taskId: input.task_id,
@@ -1035,7 +1040,7 @@ NOTE: At any point in time through this workflow you should feel free to ask the
       })
 
       for (const item of yield* registry.tools({
-        modelID: ModelID.make(input.model.api.id),
+        modelID: input.model.id,
         providerID: input.model.providerID,
         agent: input.agent,
       })) {
